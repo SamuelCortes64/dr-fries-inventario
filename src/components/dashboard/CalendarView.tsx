@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { cn } from "@/lib/utils";
+import { toDateOnly } from "@/lib/dates";
 import {
   STANDARD_PACKAGE_KG,
   getProductCodeById,
@@ -138,14 +139,18 @@ export function CalendarView({
 
   const productionForDay = useMemo(() => {
     const rows = selectedDateKey
-      ? production.filter((row) => row.production_date === selectedDateKey)
+      ? production.filter(
+          (row) => toDateOnly(row.production_date) === selectedDateKey,
+        )
       : [];
     return [...rows].sort((a, b) => a.id - b.id);
   }, [production, selectedDateKey]);
 
   const shipmentsForDay = useMemo(() => {
     const rows = selectedDateKey
-      ? shipments.filter((row) => row.shipment_date === selectedDateKey)
+      ? shipments.filter(
+          (row) => toDateOnly(row.shipment_date) === selectedDateKey,
+        )
       : [];
     return [...rows].sort((a, b) => a.id - b.id);
   }, [shipments, selectedDateKey]);
@@ -169,14 +174,16 @@ export function CalendarView({
     production.forEach((row) => {
       const code = getProductCodeById(productMap, row.product_id);
       if (!code) return;
-      const entry = ensure(row.production_date);
+      const dateKey = toDateOnly(row.production_date);
+      const entry = ensure(dateKey);
       entry.production[code] += row.packages ?? 0;
     });
 
     shipments.forEach((row) => {
       const code = getProductCodeById(productMap, row.product_id);
       if (!code) return;
-      const entry = ensure(row.shipment_date);
+      const dateKey = toDateOnly(row.shipment_date);
+      const entry = ensure(dateKey);
       entry.shipments[code] += row.packages ?? 0;
     });
 
@@ -239,7 +246,7 @@ export function CalendarView({
       }
       await onRefresh();
       setEditTarget(null);
-    } catch (error) {
+    } catch {
       setEditError("No se pudo actualizar el registro.");
     } finally {
       setIsSaving(false);
@@ -277,7 +284,17 @@ export function CalendarView({
               {format(currentMonth, "MMMM yyyy")}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const today = new Date();
+                setCurrentMonth(startOfMonth(today));
+                setSelectedDate(today);
+              }}
+            >
+              Hoy
+            </Button>
             <Button
               variant="secondary"
               onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
@@ -320,7 +337,7 @@ export function CalendarView({
                     type="button"
                     onClick={() => setSelectedDate(day)}
                     className={cn(
-                      "min-h-[130px] rounded-xl border border-slate-200 bg-white px-2 py-2 text-left text-[11px] text-slate-600 transition hover:border-sky-300 hover:bg-sky-50/40",
+                      "min-h-[100px] sm:min-h-[130px] rounded-xl border border-slate-200 bg-white px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-[10px] sm:text-[11px] text-slate-600 transition hover:border-sky-300 hover:bg-sky-50/40",
                       !isSameMonth(day, currentMonth) && "opacity-40",
                       isToday(day) && "border-sky-400 bg-sky-50",
                       isSelected && "ring-2 ring-sky-400",
@@ -337,30 +354,12 @@ export function CalendarView({
                         )}
                       </div>
                     </div>
-                    <div className="mt-2 space-y-1 text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Prod FR</span>
-                        <span className="font-semibold text-emerald-700">
-                          {productionTotals.FR}
-                        </span>
+                    <div className="mt-2 space-y-0.5 text-[10px]">
+                      <div className="font-medium text-emerald-700">
+                        Prod: FR {productionTotals.FR} / CA {productionTotals.CA}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Prod CA</span>
-                        <span className="font-semibold text-emerald-700">
-                          {productionTotals.CA}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Env FR</span>
-                        <span className="font-semibold text-rose-700">
-                          {shipmentTotals.FR}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Env CA</span>
-                        <span className="font-semibold text-rose-700">
-                          {shipmentTotals.CA}
-                        </span>
+                      <div className="font-medium text-rose-700">
+                        Env: FR {shipmentTotals.FR} / CA {shipmentTotals.CA}
                       </div>
                     </div>
                   </button>

@@ -21,9 +21,11 @@ import { useDashboardData } from "@/hooks/useDashboardData";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
+import { toDateOnly } from "@/lib/dates";
 import {
   STANDARD_PACKAGE_KG,
   getProductLabelById,
+  getStandardProductLabel,
   groupInventoryByCode,
   sumPackagesByCode,
 } from "@/lib/products";
@@ -125,7 +127,8 @@ export function ReportesPage() {
   const productionByDate = useMemo(
     () =>
       filteredProduction.reduce<Record<string, number>>((acc, row) => {
-        acc[row.production_date] = (acc[row.production_date] ?? 0) + row.packages;
+        const key = toDateOnly(row.production_date);
+        acc[key] = (acc[key] ?? 0) + row.packages;
         return acc;
       }, {}),
     [filteredProduction],
@@ -134,7 +137,8 @@ export function ReportesPage() {
   const shipmentsByDate = useMemo(
     () =>
       filteredShipments.reduce<Record<string, number>>((acc, row) => {
-        acc[row.shipment_date] = (acc[row.shipment_date] ?? 0) + row.packages;
+        const key = toDateOnly(row.shipment_date);
+        acc[key] = (acc[key] ?? 0) + row.packages;
         return acc;
       }, {}),
     [filteredShipments],
@@ -197,16 +201,20 @@ export function ReportesPage() {
       (sum, value) => sum + value,
       0,
     );
-    let runningStock = filterRange ? 0 : inventoryTotalPackages - netTotal;
+    const initialStock = filterRange ? 0 : inventoryTotalPackages - netTotal;
 
-    return daysRange.map((day) => {
-      const key = format(day, "yyyy-MM-dd");
-      runningStock += netByDate.get(key) ?? 0;
-      return {
-        date: format(day, "dd MMM"),
-        stock: Math.max(runningStock, 0),
-      };
-    });
+    return daysRange.reduce<Array<{ date: string; stock: number }>>(
+      (acc, day) => {
+        const key = format(day, "yyyy-MM-dd");
+        const prevStock =
+          acc.length === 0 ? initialStock : acc[acc.length - 1].stock;
+        const net = netByDate.get(key) ?? 0;
+        const newStock = Math.max(prevStock + net, 0);
+        acc.push({ date: format(day, "dd MMM"), stock: newStock });
+        return acc;
+      },
+      [],
+    );
   }, [
     daysRange,
     inventoryTotalPackages,
@@ -401,13 +409,13 @@ export function ReportesPage() {
             </h3>
             <div className="mt-4 space-y-1 text-sm text-slate-600">
               <div className="flex items-center justify-between">
-                <span>Papas a la Francesa (2.5 kg)</span>
+                <span>{getStandardProductLabel("FR")}</span>
                 <span className="font-semibold text-slate-900">
                   {productionTotals.FR} paquetes
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Papas en Cascos (2.5 kg)</span>
+                <span>{getStandardProductLabel("CA")}</span>
                 <span className="font-semibold text-slate-900">
                   {productionTotals.CA} paquetes
                 </span>
@@ -427,13 +435,13 @@ export function ReportesPage() {
             </h3>
             <div className="mt-4 space-y-1 text-sm text-slate-600">
               <div className="flex items-center justify-between">
-                <span>Papas a la Francesa (2.5 kg)</span>
+                <span>{getStandardProductLabel("FR")}</span>
                 <span className="font-semibold text-slate-900">
                   {shipmentTotals.FR} paquetes
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Papas en Cascos (2.5 kg)</span>
+                <span>{getStandardProductLabel("CA")}</span>
                 <span className="font-semibold text-slate-900">
                   {shipmentTotals.CA} paquetes
                 </span>

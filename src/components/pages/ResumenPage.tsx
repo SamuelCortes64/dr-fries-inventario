@@ -5,7 +5,6 @@ import {
   eachDayOfInterval,
   endOfMonth,
   format,
-  isSameDay,
   isWithinInterval,
   parseISO,
   startOfMonth,
@@ -18,9 +17,11 @@ import { InventoryTable } from "@/components/dashboard/InventoryTable";
 import { Charts } from "@/components/dashboard/Charts";
 import { Card } from "@/components/ui/Card";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { toDateOnly } from "@/lib/dates";
 import {
   STANDARD_PACKAGE_KG,
   getProductCodeById,
+  getStandardProductLabel,
   groupInventoryByCode,
   sumPackagesByCode,
 } from "@/lib/products";
@@ -68,27 +69,28 @@ export function ResumenPage() {
     end: endOfMonth(previousMonthDate),
   };
 
+  const todayKey = format(today, "yyyy-MM-dd");
   const productionToday = useMemo(() => {
     const totals = { FR: 0, CA: 0 };
     production.forEach((row) => {
-      if (!isSameDay(parseISO(row.production_date), today)) return;
+      if (toDateOnly(row.production_date) !== todayKey) return;
       const code = getProductCodeById(productMap, row.product_id);
       if (!code) return;
       totals[code] += row.packages ?? 0;
     });
     return totals;
-  }, [production, productMap, today]);
+  }, [production, productMap, todayKey]);
 
   const shipmentsToday = useMemo(() => {
     const totals = { FR: 0, CA: 0 };
     shipments.forEach((row) => {
-      if (!isSameDay(parseISO(row.shipment_date), today)) return;
+      if (toDateOnly(row.shipment_date) !== todayKey) return;
       const code = getProductCodeById(productMap, row.product_id);
       if (!code) return;
       totals[code] += row.packages ?? 0;
     });
     return totals;
-  }, [shipments, productMap, today]);
+  }, [shipments, productMap, todayKey]);
 
   const stockFr = inventoryMap.get("FR")?.stock_packages ?? 0;
   const stockCa = inventoryMap.get("CA")?.stock_packages ?? 0;
@@ -187,12 +189,12 @@ export function ResumenPage() {
 
   const kpiItems = [
     {
-      label: "Stock Actual Papas a la Francesa",
+      label: `Stock Actual ${getStandardProductLabel("FR")}`,
       value: `${stockFr} paquetes`,
       helper: `${stockFrKg.toFixed(1)} kg`,
     },
     {
-      label: "Stock Actual Papas en Cascos",
+      label: `Stock Actual ${getStandardProductLabel("CA")}`,
       value: `${stockCa} paquetes`,
       helper: `${stockCaKg.toFixed(1)} kg`,
     },
@@ -200,13 +202,13 @@ export function ResumenPage() {
       label: "Producción Hoy",
       lines: [
         {
-          label: "Papas a la Francesa",
+          label: getStandardProductLabel("FR"),
           value: `${productionToday.FR} paquetes (${(
             productionToday.FR * STANDARD_PACKAGE_KG
           ).toFixed(1)} kg)`,
         },
         {
-          label: "Papas en Cascos",
+          label: getStandardProductLabel("CA"),
           value: `${productionToday.CA} paquetes (${(
             productionToday.CA * STANDARD_PACKAGE_KG
           ).toFixed(1)} kg)`,
@@ -217,13 +219,13 @@ export function ResumenPage() {
       label: "Envíos Hoy",
       lines: [
         {
-          label: "Papas a la Francesa",
+          label: getStandardProductLabel("FR"),
           value: `${shipmentsToday.FR} paquetes (${(
             shipmentsToday.FR * STANDARD_PACKAGE_KG
           ).toFixed(1)} kg)`,
         },
         {
-          label: "Papas en Cascos",
+          label: getStandardProductLabel("CA"),
           value: `${shipmentsToday.CA} paquetes (${(
             shipmentsToday.CA * STANDARD_PACKAGE_KG
           ).toFixed(1)} kg)`,
@@ -234,11 +236,11 @@ export function ResumenPage() {
       label: "Inventario Total",
       lines: [
         {
-          label: "Papas a la Francesa",
+          label: getStandardProductLabel("FR"),
           value: `${stockFr} paquetes (${stockFrKg.toFixed(1)} kg)`,
         },
         {
-          label: "Papas en Cascos",
+          label: getStandardProductLabel("CA"),
           value: `${stockCa} paquetes (${stockCaKg.toFixed(1)} kg)`,
         },
       ],
@@ -251,7 +253,8 @@ export function ResumenPage() {
   const productionByDate = useMemo(
     () =>
       production.reduce<Record<string, number>>((acc, row) => {
-        acc[row.production_date] = (acc[row.production_date] ?? 0) + row.packages;
+        const key = toDateOnly(row.production_date);
+        acc[key] = (acc[key] ?? 0) + row.packages;
         return acc;
       }, {}),
     [production],
@@ -260,7 +263,8 @@ export function ResumenPage() {
   const shipmentsByDate = useMemo(
     () =>
       shipments.reduce<Record<string, number>>((acc, row) => {
-        acc[row.shipment_date] = (acc[row.shipment_date] ?? 0) + row.packages;
+        const key = toDateOnly(row.shipment_date);
+        acc[key] = (acc[key] ?? 0) + row.packages;
         return acc;
       }, {}),
     [shipments],
@@ -314,16 +318,20 @@ export function ResumenPage() {
       (sum, value) => sum + value,
       0,
     );
-    let runningStock = totalInventoryPackages - netTotal;
+    const initialStock = totalInventoryPackages - netTotal;
 
-    return daysRange.map((day) => {
-      const key = format(day, "yyyy-MM-dd");
-      runningStock += netByDate.get(key) ?? 0;
-      return {
-        date: format(day, "dd MMM"),
-        stock: Math.max(runningStock, 0),
-      };
-    });
+    return daysRange.reduce<Array<{ date: string; stock: number }>>(
+      (acc, day) => {
+        const key = format(day, "yyyy-MM-dd");
+        const prevStock =
+          acc.length === 0 ? initialStock : acc[acc.length - 1].stock;
+        const net = netByDate.get(key) ?? 0;
+        const newStock = Math.max(prevStock + net, 0);
+        acc.push({ date: format(day, "dd MMM"), stock: newStock });
+        return acc;
+      },
+      [],
+    );
   }, [daysRange, productionByDate, shipmentsByDate, totalInventoryPackages]);
 
   return (
@@ -349,7 +357,7 @@ export function ResumenPage() {
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
             <p className="font-semibold text-slate-700">
-              Inventario Actual (Suma total de Francesas y Cascos)
+              Inventario actual (suma total de francesas y cascos)
             </p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">
               {totalInventoryPackages}
@@ -374,13 +382,13 @@ export function ResumenPage() {
                 </p>
                 <div className="mt-3 space-y-1 text-sm text-slate-600">
                   <div className="flex items-center justify-between">
-                    <span>Papas a la Francesa (2.5 kg)</span>
+                    <span>{getStandardProductLabel("FR")}</span>
                     <span className="font-semibold text-slate-900">
                       {productionCurrentMonth.FR} paquetes
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Papas en Cascos (2.5 kg)</span>
+                    <span>{getStandardProductLabel("CA")}</span>
                     <span className="font-semibold text-slate-900">
                       {productionCurrentMonth.CA} paquetes
                     </span>
@@ -408,13 +416,13 @@ export function ResumenPage() {
                 </p>
                 <div className="mt-3 space-y-1 text-sm text-slate-600">
                   <div className="flex items-center justify-between">
-                    <span>Papas a la Francesa (2.5 kg)</span>
+                    <span>{getStandardProductLabel("FR")}</span>
                     <span className="font-semibold text-slate-900">
                       {shipmentsCurrentMonth.FR} paquetes
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Papas en Cascos (2.5 kg)</span>
+                    <span>{getStandardProductLabel("CA")}</span>
                     <span className="font-semibold text-slate-900">
                       {shipmentsCurrentMonth.CA} paquetes
                     </span>
@@ -442,14 +450,14 @@ export function ResumenPage() {
                 </p>
                 <div className="mt-3 space-y-1 text-sm text-slate-600">
                   <div className="flex items-center justify-between">
-                    <span>Papas a la Francesa</span>
+                    <span>{getStandardProductLabel("FR")}</span>
                     <span className="font-semibold text-slate-900">
                       {(productionCurrentMonth.FR * STANDARD_PACKAGE_KG).toFixed(1)}{" "}
                       kg
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Papas en Cascos</span>
+                    <span>{getStandardProductLabel("CA")}</span>
                     <span className="font-semibold text-slate-900">
                       {(productionCurrentMonth.CA * STANDARD_PACKAGE_KG).toFixed(1)}{" "}
                       kg
@@ -467,14 +475,14 @@ export function ResumenPage() {
                 </p>
                 <div className="mt-3 space-y-1 text-sm text-slate-600">
                   <div className="flex items-center justify-between">
-                    <span>Papas a la Francesa</span>
+                    <span>{getStandardProductLabel("FR")}</span>
                     <span className="font-semibold text-slate-900">
                       {(shipmentsCurrentMonth.FR * STANDARD_PACKAGE_KG).toFixed(1)}{" "}
                       kg
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Papas en Cascos</span>
+                    <span>{getStandardProductLabel("CA")}</span>
                     <span className="font-semibold text-slate-900">
                       {(shipmentsCurrentMonth.CA * STANDARD_PACKAGE_KG).toFixed(1)}{" "}
                       kg

@@ -44,7 +44,7 @@ export function Charts({
 }: ChartsProps) {
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      <Card className="lg:col-span-2">
+      <Card className="lg:col-span-2 min-w-0">
         <div className="mb-6">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
             Producción por día
@@ -53,8 +53,8 @@ export function Charts({
             Paquetes producidos
           </h3>
         </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-56 min-h-[200px] min-w-0 sm:h-64">
+          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
             <BarChart data={productionByDay}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="date" tick={{ fill: "#64748b" }} />
@@ -80,8 +80,8 @@ export function Charts({
             Distribución mensual
           </h3>
         </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-56 min-h-[200px] min-w-0 sm:h-64">
+          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
             <PieChart>
               <Pie
                 data={shipmentsByClient}
@@ -119,8 +119,8 @@ export function Charts({
               Evolución del inventario
             </h3>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-56 min-h-[200px] min-w-0 sm:h-64">
+            <ResponsiveContainer width="100%" height="100%" minHeight={200}>
               <LineChart data={stockHistory}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="date" tick={{ fill: "#64748b" }} />

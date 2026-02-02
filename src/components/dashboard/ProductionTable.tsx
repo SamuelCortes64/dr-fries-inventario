@@ -56,14 +56,14 @@ export function ProductionTable({
     <Card>
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-          Registro de Producción
+          Listado de Producción
         </p>
         <h3 className="mt-2 text-lg font-semibold text-slate-900">
-          Últimos Registros
+          Tabla de registros
         </h3>
       </div>
-      <div className="mt-6 overflow-x-auto">
-        <table className="min-w-full text-sm">
+      <div className="mt-6 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="text-left text-xs uppercase tracking-[0.18em] text-slate-500">
             <tr>
               <th className="py-3 pr-4">Fecha</th>

@@ -41,7 +41,7 @@ export function useDashboardData() {
     setLoading(true);
     setError(null);
 
-    const startDate = format(subMonths(new Date(), 6), "yyyy-MM-dd");
+    const startDate = format(subMonths(new Date(), 12), "yyyy-MM-dd");
 
     const [
       productsResponse,
@@ -90,7 +90,10 @@ export function useDashboardData() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const load = () => {
+      refresh();
+    };
+    const id = setTimeout(load, 0);
 
     const channel = supabase
       .channel("inventory-live")
@@ -107,6 +110,7 @@ export function useDashboardData() {
       .subscribe();
 
     return () => {
+      clearTimeout(id);
       supabase.removeChannel(channel);
     };
   }, [refresh]);

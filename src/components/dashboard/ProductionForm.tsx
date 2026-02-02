@@ -57,7 +57,7 @@ export function ProductionForm({
       setPackages("");
       setNotes("");
       setStatus("Producción registrada.");
-    } catch (error) {
+    } catch {
       setStatus("No se pudo registrar la producción.");
     }
   };

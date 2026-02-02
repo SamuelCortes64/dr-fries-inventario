@@ -9,7 +9,7 @@ type Product = Database["public"]["Tables"]["products"]["Row"];
 type InventoryRow = Database["public"]["Views"]["inventory_summary"]["Row"];
 
 const STANDARD_BASE_LABELS: Record<StandardProductCode, string> = {
-  FR: "Papas a la francesa",
+  FR: "Papa a la francesa",
   CA: "Papas en cascos",
 };
 

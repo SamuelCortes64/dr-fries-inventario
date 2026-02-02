@@ -65,7 +65,7 @@ export function ShipmentForm({
       setPackages("");
       setNotes("");
       setStatus("Envío registrado.");
-    } catch (error) {
+    } catch {
       setStatus("No se pudo registrar el envío.");
     }
   };

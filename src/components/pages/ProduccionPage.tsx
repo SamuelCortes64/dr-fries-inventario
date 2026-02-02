@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
-import { useRouter, useSearchParams } from "next/navigation";
+import { format, getMonth, getYear, parseISO } from "date-fns";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProductionForm } from "@/components/dashboard/ProductionForm";
 import { ProductionTable } from "@/components/dashboard/ProductionTable";
@@ -11,11 +11,19 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { Tabs } from "@/components/ui/Tabs";
 import { useDashboardData } from "@/hooks/useDashboardData";
-import { getProductCodeById, getStandardProductOptions } from "@/lib/products";
+import { toDateOnly } from "@/lib/dates";
+import { getProductCodeById, getStandardProductLabel, getStandardProductOptions } from "@/lib/products";
 import type { Database } from "@/lib/supabase/types";
 
 type ProductionRow = Database["public"]["Tables"]["production"]["Row"];
+
+const PAGE_SIZE = 20;
+const MONTHS = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
 
 export function ProduccionPage() {
   const {
@@ -30,7 +38,6 @@ export function ProduccionPage() {
     deleteProduction,
   } = useDashboardData();
 
-  const router = useRouter();
   const searchParams = useSearchParams();
   const filterDate = searchParams.get("date");
 
@@ -48,9 +55,28 @@ export function ProduccionPage() {
     [products],
   );
 
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    production.forEach((row) => {
+      try {
+        years.add(getYear(parseISO(row.production_date)));
+      } catch {
+        years.add(new Date().getFullYear());
+      }
+    });
+    if (years.size === 0) years.add(new Date().getFullYear());
+    return Array.from(years).sort((a, b) => a - b);
+  }, [production]);
+
+  const [activeTab, setActiveTab] = useState<"registrar" | "ver">("registrar");
+  const [filterMonth, setFilterMonth] = useState<number | "">("");
+  const [filterYear, setFilterYear] = useState<number | "">("");
+  const [filterProduct, setFilterProduct] = useState<"all" | "FR" | "CA">("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editTarget, setEditTarget] = useState<ProductionRow | null>(null);
   const [editValues, setEditValues] = useState({
+    production_date: "",
     productId: "",
     packages: "",
     notes: "",
@@ -77,6 +103,7 @@ export function ProduccionPage() {
     const code = getProductCodeById(productMap, row.product_id);
     const option = code ? productOptionByCode.get(code) : null;
     setEditValues({
+      production_date: toDateOnly(row.production_date),
       productId: option?.id ?? row.product_id,
       packages: String(row.packages ?? 0),
       notes: row.notes ?? "",
@@ -88,20 +115,21 @@ export function ProduccionPage() {
   const handleSaveEdit = async () => {
     if (!editTarget) return;
     setEditError(null);
-    if (!editValues.productId || !editValues.packages) {
-      setEditError("Completa producto y paquetes.");
+    if (!editValues.production_date || !editValues.productId || !editValues.packages) {
+      setEditError("Completa fecha, producto y paquetes.");
       return;
     }
     setIsSaving(true);
     try {
       await updateProduction(editTarget.id, {
+        production_date: editValues.production_date,
         product_id: editValues.productId,
         packages: Number(editValues.packages),
         notes: editValues.notes.trim() ? editValues.notes.trim() : null,
       });
       await refresh();
       setEditTarget(null);
-    } catch (error) {
+    } catch {
       setEditError("No se pudo actualizar la producción.");
     } finally {
       setIsSaving(false);
@@ -118,13 +146,35 @@ export function ProduccionPage() {
   };
 
   const filteredProduction = useMemo(() => {
-    const rows = filterDate
-      ? production.filter((row) => row.production_date === filterDate)
-      : production;
+    let rows = production;
+    if (filterDate) {
+      rows = rows.filter((row) => toDateOnly(row.production_date) === filterDate);
+    }
+    if (filterMonth !== "" && filterYear !== "") {
+      rows = rows.filter((row) => {
+        try {
+          const d = parseISO(row.production_date);
+          return getMonth(d) + 1 === filterMonth && getYear(d) === filterYear;
+        } catch {
+          return false;
+        }
+      });
+    }
+    if (filterProduct !== "all") {
+      rows = rows.filter((row) => getProductCodeById(productMap, row.product_id) === filterProduct);
+    }
     return [...rows].sort((a, b) =>
       b.production_date.localeCompare(a.production_date),
     );
-  }, [production, filterDate]);
+  }, [production, filterDate, filterMonth, filterYear, filterProduct, productMap]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProduction.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const paginatedRows = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return filteredProduction.slice(start, start + PAGE_SIZE);
+  }, [filteredProduction, safePage]);
 
   return (
     <AppShell
@@ -138,40 +188,153 @@ export function ProduccionPage() {
         </Card>
       )}
       <section className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-              Operaciones
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-900">
-              Registrar Producción
-            </h2>
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            Operaciones
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+            Producción
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Registra y gestiona la producción.
+          </p>
+        </div>
+
+        <Tabs
+          tabs={[
+            { id: "registrar", label: "Registrar producción" },
+            { id: "ver", label: "Ver producción" },
+          ]}
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as "registrar" | "ver")}
+        />
+
+        {activeTab === "registrar" && (
+          <div className="max-w-xl">
+            <ProductionForm
+              productOptions={productOptions}
+              onSubmit={handleProductionSubmit}
+              isSubmitting={isSubmitting}
+            />
           </div>
-          {filterDate && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-500">
-                Filtro activo: {filterDate}
-              </span>
-              <Button variant="secondary" onClick={() => router.push("/produccion")}>
-                Limpiar filtro
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="grid gap-6 lg:grid-cols-[1.1fr,1.9fr]">
-          <ProductionForm
-            productOptions={productOptions}
-            onSubmit={handleProductionSubmit}
-            isSubmitting={isSubmitting}
-          />
-          <ProductionTable
-            rows={filteredProduction}
-            productMap={productMap}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
-        </div>
+        )}
+
+        {activeTab === "ver" && (
+          <div className="space-y-4">
+            <Card className="overflow-hidden">
+              <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Ver producción
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                  Filtros
+                </h3>
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Año
+                    </label>
+                    <Select
+                      value={filterYear === "" ? "" : String(filterYear)}
+                      onChange={(e) =>
+                        setFilterYear(e.target.value ? Number(e.target.value) : "")
+                      }
+                    >
+                      <option value="">Todos</option>
+                      {availableYears.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Mes
+                    </label>
+                    <Select
+                      value={filterMonth === "" ? "" : String(filterMonth)}
+                      onChange={(e) =>
+                        setFilterMonth(e.target.value ? Number(e.target.value) : "")
+                      }
+                    >
+                      <option value="">Todos</option>
+                      {MONTHS.map((m, i) => (
+                        <option key={m} value={i + 1}>{m}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Tipo de papa
+                    </label>
+                    <Select
+                      value={filterProduct}
+                      onChange={(e) =>
+                        setFilterProduct(
+                          e.target.value === "all"
+                            ? "all"
+                            : (e.target.value as "FR" | "CA"),
+                        )
+                      }
+                    >
+                      <option value="all">Todas</option>
+                      <option value="FR">{getStandardProductLabel("FR")}</option>
+                      <option value="CA">{getStandardProductLabel("CA")}</option>
+                    </Select>
+                  </div>
+                  {(filterDate || filterMonth !== "" || filterYear !== "" || filterProduct !== "all") && (
+                    <Button
+                      variant="secondary"
+                      className="min-h-[44px]"
+                      onClick={() => {
+                        setFilterMonth("");
+                        setFilterYear("");
+                        setFilterProduct("all");
+                      }}
+                    >
+                      Limpiar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+            <ProductionTable
+              rows={paginatedRows}
+              productMap={productMap}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+            />
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:px-6">
+                <p className="text-xs text-slate-500">
+                  {filteredProduction.length} registro(s)
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={safePage <= 1}
+                    className="min-h-[44px]"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-slate-600">
+                    Pág. {safePage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    disabled={safePage >= totalPages}
+                    className="min-h-[44px]"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
+
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
@@ -186,13 +349,28 @@ export function ProduccionPage() {
               </div>
               <button
                 type="button"
-                className="text-sm text-slate-500 hover:text-slate-700"
+                className="text-sm text-slate-500 hover:text-slate-700 min-h-[44px] min-w-[44px]"
                 onClick={() => setEditTarget(null)}
               >
                 Cerrar
               </button>
             </div>
             <div className="mt-4 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Fecha de producción
+                </label>
+                <Input
+                  type="date"
+                  value={editValues.production_date}
+                  onChange={(e) =>
+                    setEditValues((prev) => ({
+                      ...prev,
+                      production_date: e.target.value,
+                    }))
+                  }
+                />
+              </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600">
                   Producto
