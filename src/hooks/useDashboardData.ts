@@ -114,6 +114,7 @@ export function useDashboardData() {
   const insertProduction = useCallback(async (payload: ProductionInsert) => {
     const { error: insertError } = await supabase
       .from("production")
+      // @ts-expect-error Supabase client infers never for insert; payload matches Insert type
       .insert(payload);
     if (insertError) {
       throw insertError;
@@ -123,6 +124,7 @@ export function useDashboardData() {
   const insertShipment = useCallback(async (payload: ShipmentInsert) => {
     const { error: insertError } = await supabase
       .from("shipments")
+      // @ts-expect-error Supabase client infers never for insert; payload matches Insert type
       .insert(payload);
     if (insertError) {
       throw insertError;
@@ -133,6 +135,7 @@ export function useDashboardData() {
     async (id: number, payload: ProductionUpdate) => {
       const { error: updateError } = await supabase
         .from("production")
+        // @ts-expect-error Supabase client infers never for update; payload matches Update type
         .update(payload)
         .eq("id", id);
       if (updateError) {
@@ -146,6 +149,7 @@ export function useDashboardData() {
     async (id: number, payload: ShipmentUpdate) => {
       const { error: updateError } = await supabase
         .from("shipments")
+        // @ts-expect-error Supabase client infers never for update; payload matches Update type
         .update(payload)
         .eq("id", id);
       if (updateError) {

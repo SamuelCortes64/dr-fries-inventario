@@ -20,12 +20,16 @@ import { Select } from "@/components/ui/Select";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { supabase } from "@/lib/supabase/client";
+import type { Database } from "@/lib/supabase/types";
 import {
   STANDARD_PACKAGE_KG,
   getProductLabelById,
   groupInventoryByCode,
   sumPackagesByCode,
 } from "@/lib/products";
+
+type ProductionRow = Database["public"]["Tables"]["production"]["Row"];
+type ShipmentRow = Database["public"]["Tables"]["shipments"]["Row"];
 
 const MONTHS = [
   "Enero",
@@ -247,7 +251,7 @@ export function ReportesPage() {
       return;
     }
 
-    const rows = (data ?? []).map((row) => ({
+    const rows = ((data ?? []) as ProductionRow[]).map((row) => ({
       fecha: row.production_date,
       producto: getProductLabelById(productMap, row.product_id),
       paquetes: row.packages,
@@ -268,7 +272,7 @@ export function ReportesPage() {
       return;
     }
 
-    const rows = (data ?? []).map((row) => ({
+    const rows = ((data ?? []) as ShipmentRow[]).map((row) => ({
       fecha: row.shipment_date,
       cliente: clientMap.get(row.client_id)?.name ?? "Cliente",
       producto: getProductLabelById(productMap, row.product_id),

@@ -164,7 +164,7 @@ export function groupInventoryByCode(
 type DatedRow = {
   product_id: string;
   packages: number;
-  [key: string]: string | number;
+  [key: string]: string | number | null;
 };
 
 export function sumPackagesByCode<T extends DatedRow>(
